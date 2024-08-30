@@ -560,6 +560,13 @@ module composable_token::composable_token {
     }
 
     #[event]
+    struct TraitsEquippedEvent has drop, store {
+        composable: ComposableMetadata,
+        traits: vector<Object<Trait>>,
+        new_uri: String
+    }
+
+    #[event]
     struct TraitUnequippedEvent has drop, store {
         composable: ComposableMetadata,
         trait: TraitMetadata,
@@ -1038,6 +1045,43 @@ module composable_token::composable_token {
         } else { abort EUNKNOWN_TOKEN_TYPE };
     }
 
+    /// Internal function to equip a trait to a composable token
+    fun equip_trait_internal(
+        signer_ref: &signer,
+        composable_object: Object<Composable>,
+        trait_object: Object<Trait>,
+    ) acquires Composable, Trait, DA {
+        // Assert ungated transfer enabled for the object token.
+        assert!(object::ungated_transfer_allowed(trait_object), EUNGATED_TRANSFER_DISABLED);
+        // Add the object to the end of the vector
+        vector::push_back<Object<Trait>>(&mut authorized_composable_mut_borrow(&composable_object, signer_ref).traits, trait_object);
+        // Update parent
+        update_parent<Composable, Trait, Equip>(signer_ref, composable_object, trait_object);
+        // Transfer object as collection owner
+        object::transfer_to_object(signer_ref, trait_object, composable_object);
+        // Disable ungated transfer for trait object
+        freeze_transfer<Trait>(object::convert(trait_object));
+    }
+
+    /// Internal function to equip a trait to a composable token and make it soulbound
+    fun equip_soulbound_trait_internal(
+        signer_ref: &signer,
+        composable_object: Object<Composable>,
+        trait_constructor_ref: &object::ConstructorRef,
+    ) acquires Composable, Trait, DA {
+        let trait_object = object::object_from_constructor_ref(trait_constructor_ref);
+        // Assert ungated transfer enabled for the object token.
+        assert!(object::ungated_transfer_allowed(trait_object), EUNGATED_TRANSFER_DISABLED);
+        // Add the object to the end of the vector
+        vector::push_back<Object<Trait>>(&mut authorized_composable_mut_borrow(&composable_object, signer_ref).traits, trait_object);
+        // Update parent
+        update_parent<Composable, Trait, Equip>(signer_ref, composable_object, trait_object);
+        // Transfer object as collection owner
+        object::transfer_to_object(signer_ref, trait_object, composable_object);
+        // Transfer the trait, making it soulbound to the composable
+        transfer_token::transfer_soulbound(object::object_address(&composable_object), trait_constructor_ref);
+    }
+
     /// setup token; internal function used when creating a token
 
     /// Create a token based on type. Either a trait or a composable;
@@ -1119,16 +1163,8 @@ module composable_token::composable_token {
         trait_object: Object<Trait>,
         new_uri: String
     ) acquires Composable, Trait, DA {
-        // Assert ungated transfer enabled for the object token.
-        assert!(object::ungated_transfer_allowed(trait_object), EUNGATED_TRANSFER_DISABLED);
-        // Add the object to the end of the vector
-        vector::push_back<Object<Trait>>(&mut authorized_composable_mut_borrow(&composable_object, signer_ref).traits, trait_object);
-        // Update parent
-        update_parent<Composable, Trait, Equip>(signer_ref, composable_object, trait_object);
-        // Transfer object as collection owner
-        object::transfer_to_object(signer_ref, trait_object, composable_object);
-        // Disable ungated transfer for trait object
-        freeze_transfer<Trait>(object::convert(trait_object));
+        // equip
+        equip_trait_internal(signer_ref, composable_object, trait_object);
         // Update the composable uri
         update_uri(composable_object, new_uri);
         // emit event
@@ -1147,20 +1183,12 @@ module composable_token::composable_token {
         trait_constructor_ref: &object::ConstructorRef,
         new_uri: String
     ) acquires Composable, Trait, DA {
-        let trait_object = object::object_from_constructor_ref(trait_constructor_ref);
-        // Assert ungated transfer enabled for the object token.
-        assert!(object::ungated_transfer_allowed(trait_object), EUNGATED_TRANSFER_DISABLED);
-        // Add the object to the end of the vector
-        vector::push_back<Object<Trait>>(&mut authorized_composable_mut_borrow(&composable_object, signer_ref).traits, trait_object);
-        // Update parent
-        update_parent<Composable, Trait, Equip>(signer_ref, composable_object, trait_object);
-        // Transfer object as collection owner
-        object::transfer_to_object(signer_ref, trait_object, composable_object);
-        // Transfer the trait, making it soulbound to the composable
-        transfer_token::transfer_soulbound(object::object_address(&composable_object), trait_constructor_ref);
+        // equip soulbound
+        equip_soulbound_trait_internal(signer_ref, composable_object, trait_constructor_ref);
         // Update the composable uri
         update_uri(composable_object, new_uri);
         // emit event
+        let trait_object = object::object_from_constructor_ref(trait_constructor_ref);
         emit_trait_equipped_event(
             composable_object,
             trait_object,
@@ -1179,10 +1207,18 @@ module composable_token::composable_token {
         for (i in 0..vector::length(&trait_objects)) {
             // Assert ungated transfer enabled for the object token.
             let trait_object = *vector::borrow(&trait_objects, i);
-            equip_trait(signer_ref, composable_object, trait_object, new_uri);
+            equip_trait_internal(signer_ref, composable_object, trait_object);
         };
         // Update the composable uri
         update_uri(composable_object, new_uri);
+        // Emit events
+        event::emit<TraitsEquippedEvent>(
+            TraitsEquippedEvent {
+                composable: composable_metadata(composable_object),
+                traits: trait_objects,
+                new_uri
+            }
+        );
     }
 
     /// Compose multiple traits to a composable token and make them soulbound

@@ -7,8 +7,10 @@ module composable_token::composable_token_test {
     use std::option;
     use std::signer;
     use std::string;
+    use std::vector;
 
     use composable_token::composable_token::{Self, Collection, Composable, Trait};
+    use composable_token::composable_token_entry;
     use composable_token::test_utils;
 
     const COLLECTION_1_NAME: vector<u8> = b"Collection 1";
@@ -226,19 +228,16 @@ module composable_token::composable_token_test {
         // debug::print<address>(&object::owner<Trait>(trait_obj));
         // debug::print<address>(&object::owner<Collection>(collection_obj));
 
-        composable_token::equip_traits(
+        composable_token_entry::equip_traits(
             bob, 
             composable_obj, 
             vector[trait1_obj, trait2_obj], 
             uri_after_equipping_trait
         );
-        // check that the trait is equipped correctly
-       // debug::print<object::Object<Trait>>(&trait1_obj);
-       // debug::print<object::Object<Trait>>(&trait2_obj);
-        // let traits_in_composable = composable_token::traits_from_composable(composable_obj);
-       // debug::print<vector<object::Object<Trait>>>(&traits_in_composable);
-        // assert uri is updated correctly
-       // debug::print<String>(&token::uri(composable_obj));
+        
+        // assert both traits are equipped correctly
+        let traits_in_composable = composable_token::traits_from_composable(composable_obj);
+        assert!(vector::length(&traits_in_composable) == 2, 1);
 
         // unequip traits
         let uri_after_unequipping_trait = string::utf8(b"URI after unequipping the traits");
@@ -248,6 +247,10 @@ module composable_token::composable_token_test {
             vector[trait1_obj, trait2_obj], 
             uri_after_unequipping_trait
         );
+
+        // assert both traits are equipped correctly
+        let traits_in_composable = composable_token::traits_from_composable(composable_obj);
+        assert!(vector::length(&traits_in_composable) == 0, 1);
 
         // check that the trait is unequipped correctly
         // let traits_in_composable = composable_token::traits_from_composable(composable_obj);
