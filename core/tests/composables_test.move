@@ -280,4 +280,52 @@ module composable_token::composable_token_test {
         object::object_from_constructor_ref<Collection>(&collection_1_constructor_ref);
         object::object_from_constructor_ref<Collection>(&collection_2_constructor_ref);
     }
+
+    #[test(std = @0x1, alice = @0x123, bob = @0x456)]
+    // test burn
+    fun burn_token(std: signer, alice: &signer, bob: &signer) {
+        test_utils::prepare_for_test(std);
+
+        let collection_constructor_ref = test_utils::create_collection_helper<FixedSupply>(
+            alice,
+            COLLECTION_1_NAME, 
+            option::some(100)
+        );
+        let collection_obj = object::object_from_constructor_ref(&collection_constructor_ref);
+
+        let composable_constructor_ref = test_utils::create_named_composable_token_helper(
+            alice,
+            collection_obj,
+            COMPOSABLE_1_NAME
+        );
+        let composable_obj = object::object_from_constructor_ref(&composable_constructor_ref);
+
+        let trait1_constructor_ref = test_utils::create_named_trait_token_helper(
+            alice,
+            collection_obj,
+            TRAIT_1_NAME
+        );
+        let trait2_constructor_ref = test_utils::create_named_trait_token_helper(
+            alice,
+            collection_obj,
+            TRAIT_2_NAME
+        );
+
+        let trait1_obj = object::object_from_constructor_ref(&trait1_constructor_ref);
+        let trait2_obj = object::object_from_constructor_ref(&trait2_constructor_ref);
+
+        // transfer trait and composable to bob
+        composable_token::transfer_token<Composable>(alice, composable_obj, signer::address_of(bob));
+        composable_token::transfer_token<Trait>(alice, trait1_obj, signer::address_of(bob));
+        composable_token::transfer_token<Trait>(alice, trait2_obj, signer::address_of(bob));
+
+        // check that transfer is successful
+        let bob_address = signer::address_of(bob);
+        assert!(object::is_owner<Composable>(composable_obj, bob_address), 1);
+        assert!(object::is_owner<Trait>(trait1_obj, bob_address), 1);
+        assert!(object::is_owner<Trait>(trait2_obj, bob_address), 1);
+
+        // burn the composable
+        composable_token::burn_token(alice, composable_obj);
+    }
 }
