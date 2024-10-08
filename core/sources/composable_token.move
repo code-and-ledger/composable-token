@@ -1051,6 +1051,8 @@ module composable_token::composable_token {
         composable_object: Object<Composable>,
         trait_object: Object<Trait>,
     ) acquires Composable, Trait, DA {
+        // assert owner of traits
+        assert!(object::is_owner<Trait>(trait_object, signer::address_of(signer_ref)), ENOT_OWNER);
         // Assert ungated transfer enabled for the object token.
         assert!(object::ungated_transfer_allowed(trait_object), EUNGATED_TRANSFER_DISABLED);
         // Add the object to the end of the vector
